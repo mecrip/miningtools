@@ -20,10 +20,13 @@ bot.use((ctx, next) => {
         const ms = new Date() - start
         console.log('response time %sms', ms)
     })
-})
+}) 
 
-bot.telegram.sendMessage(config.TELEGRAM_ADMIN, "--------------------------\n\n hello world, bot started\n\n--------------------------\n\n");
-bot.telegram.sendMessage(config.TELEGRAM_ADMIN, "supported commands: /reboot /report");
+setTimeout(function(){
+    bot.telegram.sendMessage(config.TELEGRAM_ADMIN, "--------------------------\n\n hello world, bot started\n\n--------------------------\n\n");
+    bot.telegram.sendMessage(config.TELEGRAM_ADMIN, "supported commands: /reboot_ /report");
+    bot.telegram.sendMessage(config.TELEGRAM_ADMIN, "Version 0.0.1");    
+},30000);
 
 bot.command('/report', (ctx) => {
     if(!UserAuth(ctx)){
@@ -44,6 +47,7 @@ bot.command('/reboot', (ctx) => {
 
 setInterval(function(){
     bot.telegram.sendMessage(config.TELEGRAM_ADMIN,"\n\n--------------------\n\nHello boss!, here is your timed reporting\n\n");
+    bot.telegram.sendMessage(config.TELEGRAM_ADMIN, "supported commands: /reboot /report");
     SendFullReport(bot);
 }, config.REPORT_TIMEOUT_S*1000);
 

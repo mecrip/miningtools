@@ -4,6 +4,6 @@
 
 /home/mirko/scripts/miningbot.sh &
 
-sleep 30
+sleep 10
 
 /home/mirko/scripts/miner.sh &

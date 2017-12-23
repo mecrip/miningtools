@@ -13,7 +13,7 @@ while true; do
     
     MINER=' miner:dstm algo:equihash '
     echo `date` $MINER >> /home/mirko/logs/currentminer.log
-    /home/mirko/miner/dstm/current/zm --server europe.equihash-hub.miningpoolhub.com --port 12023 --user mecrip.AutoSneezy --pass x --noreconnect --telemetry=0.0.0.0:2222 >>  /home/mirko/logs/ccminer.log 2>&1
+    /home/mirko/miner/dstm/current/zm --server europe.equihash-hub.miningpoolhub.com --port 12023 --user $WORKER --pass $PASSWORD --noreconnect --telemetry=0.0.0.0:2222 >>  /home/mirko/logs/ccminer.log 2>&1
     #/usr/local/bin/ccminer -r 0 -a equihash -o stratum+tcp://europe.equihash-hub.miningpoolhub.com:12023     -u $WORKER -p $PASSWORD  -b 0.0.0.0:4068 --intensity 22 >> /home/mirko/logs/ccminer.log 2>&1 
     
     MINER=' miner:ccminer algo:groestl '
@@ -60,12 +60,19 @@ while true; do
     echo `date` $MINER >> /home/mirko/logs/currentminer.log
     /usr/local/bin/ccminer -r 0 -a vanilla -o stratum+tcp://hub.miningpoolhub.com:12019             -u $WORKER -p $PASSWORD  -b 0.0.0.0:4068 --intensity 22 >> /home/mirko/logs/ccminer.log 2>&1
     
+    MINER=' miner:ccminer algo:lyra2z '
+    echo `date` $MINER >> /home/mirko/logs/currentminer.log
+    /usr/local/bin/ccminer -r 0 -a lyra2z -o stratum+tcp://europe.lyra2z-hub.miningpoolhub.com:12025              -u $WORKER -p $PASSWORD  -b 0.0.0.0:4068 --intensity=22 >> /home/mirko/logs/ccminer.log 2>&1
+
+    MINER=' miner:ccminer algo:cryptonight '
+    echo `date` $MINER >> /home/mirko/logs/currentminer.log
+    /usr/local/bin/ccminer -r 0 -a cryptonight -o stratum+tcp://europe.cryptonight-hub.miningpoolhub.com:12024    -u $WORKER -p $PASSWORD  -b 0.0.0.0:4068  >> /home/mirko/logs/ccminer.log 2>&1
+
+
 done
 
 
 #missin algo
-#Lyra2z
-#Cryptonight
 #Yescrypt
 #Sia
 #Keccak
