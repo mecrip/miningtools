@@ -1,0 +1,26 @@
+{
+  "name": "miningbot",
+  "version": "0.0.1",
+  "description": "simple telegram bot to control mining",
+  "main": "miningbot.js",
+  "scripts": {
+    "start": "node miningbot.js"
+  },
+  "dependencies": {
+    "telegraf": "^3.0.0"
+  },
+  "engines": {
+    "node": "4.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mecrip/miningtools"
+  },
+  "keywords": [
+    "node",
+    "mining",
+    "telegram",
+    "bot"
+  ],
+  "author": "mecrip"
+}
