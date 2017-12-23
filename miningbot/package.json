@@ -7,7 +7,9 @@
     "start": "node miningbot.js"
   },
   "dependencies": {
-    "telegraf": "^3.0.0"
+    "telegraf": "^3.0.0",
+    "jayson": "^2.0.0",
+    "tplink-smarthome-api": "^0.20.0"
   },
   "engines": {
     "node": "4.0.0"
