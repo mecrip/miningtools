@@ -1,4 +1,4 @@
-const Version="0.0.4";
+const Version="0.0.5";
 const Commands="/reboot_ /report /balance";
 
 const ConfigFile="/home/mirko/.miningbotconfig.js";
