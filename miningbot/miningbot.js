@@ -12,35 +12,26 @@ const session = require('telegraf/session')
 var exec = require('child_process').exec;
 var jayson = require('jayson');
 
+console.info("Bot started");
 console.info(config.TELEGRAM_TOKEN); 
 const bot = new Telegraf(config.TELEGRAM_TOKEN)
 
 bot.use(session())
 
-// Register logger middleware
-bot.use((ctx, next) => {
-    const start = new Date()
-    return next().then(() => {
-        const ms = new Date() - start
-        console.log('response time %sms', ms)
-    })
-}) 
-
 setTimeout(function(){
     var sMessage="";
 
     sMessage+="--------------------------\nHello world, bot started\n--------------------------\n";
-    sMessage+=`Version: ${Version}, Commands: /reboot_ /report\n--------------------------`;
+    sMessage+=`Version: ${Version}, Commands: ${Commands}\n--------------------------`;
     bot.telegram.sendMessage(config.TELEGRAM_ADMIN, sMessage);
 
 },30000);
+
 
 bot.command('/report', (ctx) => {
     if(!UserAuth(ctx)){
         return;
     }        
-    ctx.telegram.sendMessage(ctx.message.chat.id, `\n\n--------------------------\n Hello boss, here is your report:\n--------------------------\nsupported commands: ${Commands}`);
-
     SendFullReport(bot,ctx.message.chat.id);
 })
 
@@ -53,7 +44,7 @@ bot.command('/balance', (ctx) => {
         ctx.telegram.sendMessage(ctx.message.chat.id,`Balance VTC: ${result.balanceVTC}, $: ${result.balanceUSD}, €: ${result.balanceEUR}`);
         ctx.telegram.sendMessage(ctx.message.chat.id, `Check wallet here: ${config.URLs.WalletLink}\nCheck unpaid balance here:${config.URLs.MPHSummaryLink}`);
     })
-    
+
 })
 
 bot.command('/reboot', (ctx) => {
@@ -66,13 +57,14 @@ bot.command('/reboot', (ctx) => {
 });
 
 setInterval(function(){
-    bot.telegram.sendMessage(config.TELEGRAM_ADMIN,"\n--------------------\nHello boss!, here is your timed reporting\nsupported commands: ${Commands}");
-
     SendFullReport(bot);
 }, config.REPORT_TIMEOUT_S*1000);
 
 function SendFullReport(bot,chatid)
 {
+    bot.telegram.sendMessage(chatid, `\n\n--------------------------\n Hello boss, here is your report:\n--------------------------\nsupported commands: ${Commands}`);
+
+
     QueryVPN(function(err,ip){
         if (err)
             bot.telegram.sendMessage(chatid,`VPN- Error: ${err}`);
@@ -92,45 +84,41 @@ function SendFullReport(bot,chatid)
             bot.telegram.sendMessage(chatid,`Plug-power \n I: ${Math.round(result.current*100.0)/100.0}, V: ${Math.round(result.voltage)}, W: ${Math.round(result.power)} `);
     });
 
-    getCurrentMinerReport(function(stdout){
-        var currentminer=stdout;
-        var miner="";
 
-        if (currentminer.toLowerCase().indexOf("dstm") !== -1){
-            miner="dstm";
+    DetectMiner(function (currentminer){
 
-            console.log("DSTM is running, querying api")
-            QueryDSTM(function(err,result){
-                if (err)
-                    bot.telegram.sendMessage(chatid,`DSTMstat- Error: ${err}`);
-                else
-                    bot.telegram.sendMessage(chatid,`DSTM is running \n Algo: ${result.algo}, KH/s: ${result.Hr}, Uptime(h): ${result.uptime} `);
-            });
-        }
+        switch(currentminer){
 
-        if (currentminer.toLowerCase().indexOf("ccminer") !== -1){
-            miner="ccminer";
+            case 'dstm':
+        
+                //console.log("DSTM is running, querying api")
+                QueryDSTM(function(err,result){
+                    if (err)
+                        bot.telegram.sendMessage(chatid,`DSTMstat- Error: ${err}`);
+                    else
+                        bot.telegram.sendMessage(chatid,`DSTM is running \n Algo: ${result.algo}, KH/s: ${result.Hr}, Uptime(h): ${result.uptime} `);
+                });
+                break;
 
-            console.log("CCminer is running, querying api")
-            QueryCCminer(function(err,result){
-                if (err)
-                    bot.telegram.sendMessage(chatid,`CCminer- Error: ${err}`);
-                else
-                    bot.telegram.sendMessage(chatid,`CCminer is running \n Algo: ${result.algo}, KH/s: ${result.Hr}, Uptime(h): ${result.uptime} `);
-            });
-        }
+            case 'ccminer':
+        
+                //console.log("CCminer is running, querying api")
+                QueryCCminer(function(err,result){
+                    if (err)
+                        bot.telegram.sendMessage(chatid,`CCminer- Error: ${err}`);
+                    else
+                        bot.telegram.sendMessage(chatid,`CCminer is running \n Algo: ${result.algo}, KH/s: ${result.Hr}, Uptime(h): ${result.uptime} `);
+                });
+                break;
 
-        if (miner==="")
-        {
-            bot.telegram.sendMessage(chatid,stdout);
-
-            getMinerReport(function(stdout){
+            default:
                 bot.telegram.sendMessage(chatid,stdout);
-            })
+
+                getMinerReport(function(stdout){
+                    bot.telegram.sendMessage(chatid,stdout);
+                })
         }
-
-    })
-
+    });
 }
 
 function getNvidiaReport(callback) {
@@ -194,7 +182,7 @@ function QueryWalletBalance(callback){
                 // The whole response has been received. Print out the result.
                 resp.on('end', () => {
                     coinmarketdata=JSON.parse(data)[0];
-                    console.log(data);
+                    //console.log(data);
                     result.balanceUSD=result.balanceVTC * coinmarketdata.price_usd;
                     result.balanceEUR=result.balanceVTC * coinmarketdata.price_eur;
                     result.var24=coinmarketdata.percent_change_24h;    
@@ -203,8 +191,8 @@ function QueryWalletBalance(callback){
                     result.balanceEUR=Math.round(result.balanceEUR*100.0)/100.0;
                     result.balanceVTC=Math.round(result.balanceVTC*100.0)/100.0;
                     result.balanceUSD=Math.round(result.balanceUSD*100.0)/100.0;
-                    
-                    
+
+
                     callback(result);
                 });
 
@@ -281,7 +269,7 @@ function QueryCCminer(callback)
         //sample asnwer:
         //mirko@Sneezy:~/dev/miningtools/miningbot$ echo 'summary' | netcat localhost 4068
         //NAME=ccminer;VER=2.2.3;API=1.9;ALGO=lyra2v2;GPUS=4;KHS=153232.61;SOLV=0;ACC=30;REJ=0;ACCMN=3.659;DIFF=43433.738117;NETKHS=0;POOLS=1;WAIT=0;UPTIME=492;TS=1513700779|
-        console.log("ccminer answer:" + stdout);
+        //console.log("ccminer answer:" + stdout);
         try{
             var result = stdout.match(/.*;ALGO=([a-zA-Z0-9]+);.*;KHS=([0-9]+).*;UPTIME=([0-9]+)/);
 
@@ -306,7 +294,7 @@ function QueryVPN(callback)
     var ipaddress="";
 
     exec(command, function(error,stdout,stderr){
-        console.log("ifconfig answer:" + stdout); 
+        //console.log("ifconfig answer:" + stdout); 
 
         try{
             var r=stdout.match(/inet ([0-9]*.[0-9]*.[0-9]*.[0-9]*).*/);
@@ -323,5 +311,43 @@ function QueryVPN(callback)
 
 }
 
+function DetectMiner(callback)
+{
+    //check ccminer
+    var command="ps -ef | grep ccminer | grep -v grep";
+    exec(command, function(error, stdout, stderr){
+        console.log("cc stdout len " + stdout.length );
+
+        if (stdout.length>0)
+            callback("ccminer");
+        else
+        {
+            //test dstm
+            var command="ps -ef | grep zm | grep -v grep";
+            exec(command, function(error, stdout, stderr){
+                console.log("zm stdout len" + stdout.length );
+
+                if (stdout.length>0)
+                    callback("dstm");
+                else
+                {
+                    //test claymore
+                    var command="ps -ef | grep ethdcrminer64 | grep -v grep";
+                    exec(command, function(error, stdout, stderr){
+                        console.log("clay stdout len " + stdout.length );
+
+                        if (stdout.length>0)
+                            callback("claymore");
+                        else
+                            callback("unknown");
+
+                    });
+                }
+
+            });
+        }
+    });
+
+}
 // Start polling
 bot.startPolling()
