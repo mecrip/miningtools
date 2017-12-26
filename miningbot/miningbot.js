@@ -1,12 +1,16 @@
+const Version="0.0.4";
+const Commands="/reboot_ /report /balance";
+
+const ConfigFile="/home/mirko/.miningbotconfig.js";
+
+const config = require(ConfigFile);
+
 const Telegraf = require('telegraf')
 const Extra = require('telegraf/extra')
 const session = require('telegraf/session')
-//const { reply } = Telegraf
 
 var exec = require('child_process').exec;
 var jayson = require('jayson');
-
-const config = require("/home/mirko/.miningbotconfig.js");
 
 console.info(config.TELEGRAM_TOKEN); 
 const bot = new Telegraf(config.TELEGRAM_TOKEN)
@@ -23,47 +27,71 @@ bot.use((ctx, next) => {
 }) 
 
 setTimeout(function(){
-    bot.telegram.sendMessage(config.TELEGRAM_ADMIN, "--------------------------\n\n hello world, bot started\n\n--------------------------\n\n");
-    bot.telegram.sendMessage(config.TELEGRAM_ADMIN, "supported commands: /reboot_ /report");
-    bot.telegram.sendMessage(config.TELEGRAM_ADMIN, "Version 0.0.1");    
+    var sMessage="";
+
+    sMessage+="--------------------------\nHello world, bot started\n--------------------------\n";
+    sMessage+=`Version: ${Version}, Commands: /reboot_ /report\n--------------------------`;
+    bot.telegram.sendMessage(config.TELEGRAM_ADMIN, sMessage);
+
 },30000);
 
 bot.command('/report', (ctx) => {
     if(!UserAuth(ctx)){
         return;
     }        
-    ctx.telegram.sendMessage(ctx.message.chat.id, `--------------------------\n\n hello boss, here is your report\n\n--------------------------\n\n`);
-    SendFullReport(bot);
+    ctx.telegram.sendMessage(ctx.message.chat.id, `\n\n--------------------------\n Hello boss, here is your report:\n--------------------------\nsupported commands: ${Commands}`);
+
+    SendFullReport(bot,ctx.message.chat.id);
+})
+
+bot.command('/balance', (ctx) => {
+    if(!UserAuth(ctx)){
+        return;
+    }        
+
+    QueryWalletBalance(function(result){
+        ctx.telegram.sendMessage(ctx.message.chat.id,`Balance VTC: ${result.balanceVTC}, $: ${result.balanceUSD}, €: ${result.balanceEUR}`);
+        ctx.telegram.sendMessage(ctx.message.chat.id, `Check wallet here: ${config.URLs.WalletLink}\nCheck unpaid balance here:${config.URLs.MPHSummaryLink}`);
+    })
+    
 })
 
 bot.command('/reboot', (ctx) => {
     if(!UserAuth(ctx)){
         return;
     }        
-    
+
     ctx.telegram.sendMessage(ctx.message.chat.id, `reboot request received.... restarting`);
     exec('sudo reboot');
 });
 
 setInterval(function(){
-    bot.telegram.sendMessage(config.TELEGRAM_ADMIN,"\n\n--------------------\n\nHello boss!, here is your timed reporting\n\n");
-    bot.telegram.sendMessage(config.TELEGRAM_ADMIN, "supported commands: /reboot /report");
+    bot.telegram.sendMessage(config.TELEGRAM_ADMIN,"\n--------------------\nHello boss!, here is your timed reporting\nsupported commands: ${Commands}");
+
     SendFullReport(bot);
 }, config.REPORT_TIMEOUT_S*1000);
 
-function SendFullReport(bot)
+function SendFullReport(bot,chatid)
 {
+    QueryVPN(function(err,ip){
+        if (err)
+            bot.telegram.sendMessage(chatid,`VPN- Error: ${err}`);
+        else
+            bot.telegram.sendMessage(chatid,`VPN- ip: ${ip}, smb: smb://${ip}/ , ssh://${ip} `);
+
+    });
+
     getNvidiaReport(function(stdout){
-        bot.telegram.sendMessage(config.TELEGRAM_ADMIN,stdout);
-    })
+        bot.telegram.sendMessage(chatid,stdout);
+    });
 
     QueryPlug(function(err,result){
         if (err)
-            bot.telegram.sendMessage(config.TELEGRAM_ADMIN,`Plug- Error: ${err}`);
+            bot.telegram.sendMessage(chatid,`Plug- Error: ${err}`);
         else
-            bot.telegram.sendMessage(config.TELEGRAM_ADMIN,`Plug-power \n I: ${result.current}, V: ${result.voltage}, W: ${result.power} `);
+            bot.telegram.sendMessage(chatid,`Plug-power \n I: ${Math.round(result.current*100.0)/100.0}, V: ${Math.round(result.voltage)}, W: ${Math.round(result.power)} `);
     });
-    
+
     getCurrentMinerReport(function(stdout){
         var currentminer=stdout;
         var miner="";
@@ -74,9 +102,9 @@ function SendFullReport(bot)
             console.log("DSTM is running, querying api")
             QueryDSTM(function(err,result){
                 if (err)
-                    bot.telegram.sendMessage(config.TELEGRAM_ADMIN,`DSTMstat- Error: ${err}`);
+                    bot.telegram.sendMessage(chatid,`DSTMstat- Error: ${err}`);
                 else
-                    bot.telegram.sendMessage(config.TELEGRAM_ADMIN,`DSTM is running \n Algo: ${result.algo}, KH/s: ${result.Hr}, Uptime(h): ${result.uptime} `);
+                    bot.telegram.sendMessage(chatid,`DSTM is running \n Algo: ${result.algo}, KH/s: ${result.Hr}, Uptime(h): ${result.uptime} `);
             });
         }
 
@@ -86,18 +114,18 @@ function SendFullReport(bot)
             console.log("CCminer is running, querying api")
             QueryCCminer(function(err,result){
                 if (err)
-                    bot.telegram.sendMessage(config.TELEGRAM_ADMIN,`CCminer- Error: ${err}`);
+                    bot.telegram.sendMessage(chatid,`CCminer- Error: ${err}`);
                 else
-                    bot.telegram.sendMessage(config.TELEGRAM_ADMIN,`CCminer is running \n Algo: ${result.algo}, KH/s: ${result.Hr}, Uptime(h): ${result.uptime} `);
+                    bot.telegram.sendMessage(chatid,`CCminer is running \n Algo: ${result.algo}, KH/s: ${result.Hr}, Uptime(h): ${result.uptime} `);
             });
         }
 
         if (miner==="")
         {
-            bot.telegram.sendMessage(config.TELEGRAM_ADMIN,stdout);
+            bot.telegram.sendMessage(chatid,stdout);
 
             getMinerReport(function(stdout){
-                bot.telegram.sendMessage(config.TELEGRAM_ADMIN,stdout);
+                bot.telegram.sendMessage(chatid,stdout);
             })
         }
 
@@ -106,7 +134,7 @@ function SendFullReport(bot)
 }
 
 function getNvidiaReport(callback) {
-    exec("nvidia-smi --query-gpu=name,utilization.gpu,temperature.gpu --format=csv", function(error, stdout, stderr){ callback(stdout); });
+    exec("nvidia-smi --query-gpu=name,utilization.gpu,temperature.gpu,power.draw,power.limit --format=csv", function(error, stdout, stderr){ callback(stdout); });
 };
 
 function getCurrentMinerReport(callback) {
@@ -118,14 +146,81 @@ function getMinerReport(callback) {
 };
 
 function UserAuth(ctx) {
-    if (ctx.from.id != config.TELEGRAM_ADMIN)
+    var isAllowed=false;
+
+    for (var i = 0; i < config.Admins.length; i++) {
+        if (config.Admins[i] == ctx.from.id) {
+            isAllowed=true;
+        }
+    }
+
+    if (!isAllowed)
     {
-        ctx.telegram.sendMessage(ctx.message.chat.id, `not my owner, bye!`);
-        ctx.leaveChat();
+        ctx.telegram.sendMessage(ctx.message.chat.id, `${ctx.message.from.id} not my owner, bye!`);
         return false;
     }
     return true;
 } 
+
+function QueryWalletBalance(callback){
+    const http = require('http');
+
+    var result={};
+    var coinmarketdata={};
+
+    //get balance
+    http.get(`http://explorer.vertcoin.info/ext/getbalance/${config.VertcoinMiningAddress}`, (resp) => {
+        let data = '';
+
+        // A chunk of data has been recieved.
+        resp.on('data', (chunk) => {
+            data += chunk;
+        });
+
+        // The whole response has been received. Print out the result.
+        resp.on('end', () => {
+            result.balanceVTC=data;
+
+            //get change
+            const https = require('https');
+            https.get('https://api.coinmarketcap.com/v1/ticker/vertcoin/?convert=EUR', (resp) => {
+                let data = '';
+
+                // A chunk of data has been recieved.
+                resp.on('data', (chunk) => {
+                    data += chunk;
+                });
+
+                // The whole response has been received. Print out the result.
+                resp.on('end', () => {
+                    coinmarketdata=JSON.parse(data)[0];
+                    console.log(data);
+                    result.balanceUSD=result.balanceVTC * coinmarketdata.price_usd;
+                    result.balanceEUR=result.balanceVTC * coinmarketdata.price_eur;
+                    result.var24=coinmarketdata.percent_change_24h;    
+                    result.var7d=coinmarketdata.percent_change_7d;
+
+                    result.balanceEUR=Math.round(result.balanceEUR*100.0)/100.0;
+                    result.balanceVTC=Math.round(result.balanceVTC*100.0)/100.0;
+                    result.balanceUSD=Math.round(result.balanceUSD*100.0)/100.0;
+                    
+                    
+                    callback(result);
+                });
+
+            }).on("error", (err) => {
+                console.log("Error: " + err.message);
+            });
+
+        });
+
+    }).on("error", (err) => {
+        console.log("Error: " + err.message);
+    });
+
+
+
+}
 
 function QueryPlug(callback)
 {
@@ -171,6 +266,7 @@ function QueryDSTM(callback)
                 result.AvgHr+=item.avg_sol_ps;
                 result.GpuCount++;
             }
+            result.Hr=Math.round(result.Hr*100.0)/100.0;
         }
         callback(err,result);
     });
@@ -193,13 +289,39 @@ function QueryCCminer(callback)
             res.algo=result[1];
             res.Hr=result[2];
             res.uptime=Math.round(100.0 * (result[3]/3600.0))/100.0;
-        }catch(stderr){}
+
+            res.Hr=Math.round(res.Hr*100.0)/100.0;
+        }catch(stderr){
+            console.log(stderr);
+        }
 
         callback(stderr,res); 
     });
 
 }
 
+function QueryVPN(callback)
+{
+    var command="ifconfig tun0";
+    var ipaddress="";
+
+    exec(command, function(error,stdout,stderr){
+        console.log("ifconfig answer:" + stdout); 
+
+        try{
+            var r=stdout.match(/inet ([0-9]*.[0-9]*.[0-9]*.[0-9]*).*/);
+            ipaddress=r[1];
+
+        }catch(error){
+            console.log(error);
+        }
+
+        callback(stderr,ipaddress);
+
+
+    });
+
+}
 
 // Start polling
 bot.startPolling()

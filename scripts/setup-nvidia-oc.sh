@@ -28,7 +28,7 @@ FANSPEED_1070=80
 #MEM=-250
 #PL=120
 
-sleep 30
+sleep 45
 
 export DISPLAY=:0
 

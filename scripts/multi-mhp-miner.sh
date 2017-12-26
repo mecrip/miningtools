@@ -5,6 +5,8 @@ PASSWORD='x'
 CCPARAMS=" -b 0.0.0.0:4068  --intensity=22 >> /home/mirko/logs/ccminer.log 2>&1"
 MINER=""
 
+sleep 60
+
 while true; do
     
     MINER=' miner:claymore algo:ethash '
@@ -62,7 +64,7 @@ while true; do
     
     MINER=' miner:ccminer algo:lyra2z '
     echo `date` $MINER >> /home/mirko/logs/currentminer.log
-    /usr/local/bin/ccminer -r 0 -a lyra2z -o stratum+tcp://europe.lyra2z-hub.miningpoolhub.com:12025              -u $WORKER -p $PASSWORD  -b 0.0.0.0:4068 --intensity=22 >> /home/mirko/logs/ccminer.log 2>&1
+    /usr/local/bin/ccminer -r 0 -a lyra2z -o stratum+tcp://europe.lyra2z-hub.miningpoolhub.com:12025              -u $WORKER -p $PASSWORD  -b 0.0.0.0:4068 --intensity=24 >> /home/mirko/logs/ccminer.log 2>&1
 
     MINER=' miner:ccminer algo:cryptonight '
     echo `date` $MINER >> /home/mirko/logs/currentminer.log
