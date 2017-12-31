@@ -27,7 +27,6 @@ setTimeout(function(){
 
 },30000);
 
-
 bot.command('/report', (ctx) => {
     if(!UserAuth(ctx)){
         return;
@@ -41,8 +40,7 @@ bot.command('/balance', (ctx) => {
     }        
 
     QueryWalletBalance(function(result){
-        ctx.telegram.sendMessage(ctx.message.chat.id,`Balance VTC: ${result.balanceVTC}, $: ${result.balanceUSD}, €: ${result.balanceEUR}`);
-        ctx.telegram.sendMessage(ctx.message.chat.id, `Check wallet here: ${config.URLs.WalletLink}\nCheck unpaid balance here:${config.URLs.MPHSummaryLink}`);
+        ctx.telegram.sendMessage(ctx.message.chat.id, `Balance ${result.coin}: ${result.balance}, €: ${result.balanceEUR},  ${result.link} `);
     })
 
 })
@@ -112,7 +110,7 @@ function SendFullReport(bot,chatid)
                 break;
 
             default:
-                bot.telegram.sendMessage(chatid,stdout);
+                //bot.telegram.sendMessage(chatid,stdout);
 
                 getMinerReport(function(stdout){
                     bot.telegram.sendMessage(chatid,stdout);
@@ -151,63 +149,125 @@ function UserAuth(ctx) {
 } 
 
 function QueryWalletBalance(callback){
-    const http = require('http');
+    
+	for(var w of config.Wallets){
+		switch (w.Coin){
+			case 'VTC':
+				QueryVTC(callback,w);
+				break;
+			case 'ETC':
+				QueryETC(callback,w);
+				break;
+		}
+	}
+}
 
-    var result={};
-    var coinmarketdata={};
+
+function InitQueryResult(w)
+{
+	var result={};
+	result.coin=w.Coin;
+	result.link=w.link;
+	result.balanceUSD=0;
+    result.balanceEUR=0;
+	result.var24=0;    
+	result.var7d=0;
+    result.balance=0;
+	return result;
+}
+
+function QueryETC(callback,w)
+{
+	var result=InitQueryResult(w);
+	
+	const http = require('https');
 
     //get balance
-    http.get(`http://explorer.vertcoin.info/ext/getbalance/${config.VertcoinMiningAddress}`, (resp) => {
+    http.get(`https://etcchain.com/api/v1/getAddressBalance?address=${w.wallet}`, (resp) => {
         let data = '';
 
         // A chunk of data has been recieved.
         resp.on('data', (chunk) => {
             data += chunk;
         });
-
         // The whole response has been received. Print out the result.
         resp.on('end', () => {
-            result.balanceVTC=data;
+            result.balance=JSON.parse(data).balance;
 
-            //get change
-            const https = require('https');
-            https.get('https://api.coinmarketcap.com/v1/ticker/vertcoin/?convert=EUR', (resp) => {
-                let data = '';
-
-                // A chunk of data has been recieved.
-                resp.on('data', (chunk) => {
-                    data += chunk;
-                });
-
-                // The whole response has been received. Print out the result.
-                resp.on('end', () => {
-                    coinmarketdata=JSON.parse(data)[0];
-                    //console.log(data);
-                    result.balanceUSD=result.balanceVTC * coinmarketdata.price_usd;
-                    result.balanceEUR=result.balanceVTC * coinmarketdata.price_eur;
-                    result.var24=coinmarketdata.percent_change_24h;    
-                    result.var7d=coinmarketdata.percent_change_7d;
-
-                    result.balanceEUR=Math.round(result.balanceEUR*100.0)/100.0;
-                    result.balanceVTC=Math.round(result.balanceVTC*100.0)/100.0;
-                    result.balanceUSD=Math.round(result.balanceUSD*100.0)/100.0;
-
-
-                    callback(result);
-                });
-
-            }).on("error", (err) => {
-                console.log("Error: " + err.message);
-            });
-
+			QueryCoinMarketCap(w,result,callback);
+         
         });
 
     }).on("error", (err) => {
         console.log("Error: " + err.message);
     });
 
+}
 
+function QueryVTC(callback,w){
+	const http = require('http');
+	
+	var result=InitQueryResult(w);
+	
+    //get balance
+    http.get(`http://explorer.vertcoin.info/ext/getbalance/${w.wallet}`, (resp) => {
+        let data = '';
 
+        // A chunk of data has been recieved.
+        resp.on('data', (chunk) => {
+            data += chunk;
+        });
+        // The whole response has been received. Print out the result.
+        resp.on('end', () => {
+            result.balance=data;
+
+			QueryCoinMarketCap(w,result,callback);
+         
+        });
+
+    }).on("error", (err) => {
+        console.log("Error: " + err.message);
+    });
+
+}
+
+function QueryCoinMarketCap(w,result,callback){
+	//get change
+	const https = require('https');
+	https.get(w.CoinMarketCapQuery, (resp) => {
+		let data = '';
+
+		// A chunk of data has been recieved.
+		resp.on('data', (chunk) => {
+			data += chunk;
+		});
+
+		// The whole response has been received. Print out the result.
+		resp.on('end', () => {
+			ParseBalanceResult(data,result);
+			
+			//console.log(result);
+
+			callback(result);
+		});
+
+	}).on("error", (err) => {
+		console.log("Error: " + err.message);
+	});
+}
+
+function ParseBalanceResult(data,result){
+
+	var coinmarketdata=JSON.parse(data)[0];
+	
+	result.balanceUSD=result.balance * coinmarketdata.price_usd;
+	result.balanceEUR=result.balance * coinmarketdata.price_eur;
+	result.var24=coinmarketdata.percent_change_24h;    
+	result.var7d=coinmarketdata.percent_change_7d;
+
+	result.balance=Math.round(result.balance*1000.0)/1000.0;
+	result.balanceEUR=Math.round(result.balanceEUR*100.0)/100.0;
+	result.balanceUSD=Math.round(result.balanceUSD*100.0)/100.0;
 }
 
 function QueryPlug(callback)
@@ -290,7 +350,7 @@ function QueryCCminer(callback)
 
 function QueryVPN(callback)
 {
-    var command="ifconfig tun0";
+    var command="/sbin/ifconfig tun0";
     var ipaddress="";
 
     exec(command, function(error,stdout,stderr){
@@ -298,8 +358,10 @@ function QueryVPN(callback)
 
         try{
             var r=stdout.match(/inet ([0-9]*.[0-9]*.[0-9]*.[0-9]*).*/);
-            ipaddress=r[1];
-
+            if (r!=null)
+                ipaddress=r[1];
+            else
+                ipaddress="error";
         }catch(error){
             console.log(error);
         }
