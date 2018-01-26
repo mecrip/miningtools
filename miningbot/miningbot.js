@@ -1,4 +1,4 @@
-const Version="0.0.5";
+const Version="0.0.6";
 const Commands="/reboot_ /report /balance";
 
 const ConfigFile="/home/mirko/.miningbotconfig.js";
@@ -11,6 +11,8 @@ const session = require('telegraf/session')
 
 var exec = require('child_process').exec;
 var jayson = require('jayson');
+
+var lastVPNIP="127.0.0.1";
 
 console.info("Bot started");
 console.info(config.TELEGRAM_TOKEN);
@@ -94,7 +96,7 @@ function SendFullReport(bot,chatid){
         if (err)
         bot.telegram.sendMessage(chatid,`DSTMstat- Error: ${err}`);
         else
-        bot.telegram.sendMessage(chatid,`DSTM is running \n Algo: ${result.algo}, KH/s: ${result.Hr}, Uptime(h): ${result.uptime} `);
+        bot.telegram.sendMessage(chatid,`DSTM is running \n Algo: ${result.algo}, KH/s: ${result.Hr}, Uptime(h): ${result.uptime}, api: ${result.api} `);
       });
       break;
 
@@ -154,12 +156,20 @@ function QueryWalletBalance(callback){
     switch (w.Coin){
 
       case 'VTC':
-        QueryVTC(callback,w);
-        break;
+      QueryVTC(callback,w);
+      break;
 
       case 'ETC':
-        QueryETC(callback,w);
-        break;
+      QueryETC(callback,w);
+      break;
+
+      case 'ZEC':
+      QueryZEC(callback,w);
+      break;
+
+      case 'ZCLMPH':
+      QueryZCLMPH(callback,w);
+      break;
 
     }
   }
@@ -230,6 +240,65 @@ function QueryVTC(callback,w){
 
 }
 
+function QueryZCLMPH(callback,w){
+  const http = require('https');
+
+  var result=InitQueryResult(w);
+
+  //get balance
+  http.get(`https://miningpoolhub.com/index.php?page=api&action=getuserallbalances&api_key=${w.wallet}`, (resp) => {
+    let data = '';
+
+    // A chunk of data has been recieved.
+    resp.on('data', (chunk) => {
+      data += chunk;
+    });
+    // The whole response has been received. Print out the result.
+    resp.on('end', () => {
+
+      coins=JSON.parse(data).getuserallbalances.data;
+
+      for(var c of coins)
+        if (c.coin="zclassic")
+          result.balance=c.confirmed;
+
+      QueryCoinMarketCap(w,result,callback);
+
+    });
+
+  }).on("error", (err) => {
+    console.log("Error: " + err.message);
+  });
+
+}
+
+function QueryZEC(callback,w){
+  const http = require('https');
+
+  var result=InitQueryResult(w);
+
+  //get balance
+  http.get(`https://api.zcha.in/v2/mainnet/accounts/${w.wallet}`, (resp) => {
+    let data = '';
+
+    // A chunk of data has been recieved.
+    resp.on('data', (chunk) => {
+      data += chunk;
+    });
+    // The whole response has been received. Print out the result.
+    resp.on('end', () => {
+      result.balance=JSON.parse(data).balance;
+
+      QueryCoinMarketCap(w,result,callback);
+
+    });
+
+  }).on("error", (err) => {
+    console.log("Error: " + err.message);
+  });
+
+}
+
 function QueryCoinMarketCap(w,result,callback){
   //get change
   const https = require('https');
@@ -263,7 +332,6 @@ function ParseBalanceResult(data,result){
   result.balanceEUR=result.balance * coinmarketdata.price_eur;
   result.var24=coinmarketdata.percent_change_24h;
   result.var7d=coinmarketdata.percent_change_7d;
-
   result.balance=Math.round(result.balance*1000.0)/1000.0;
   result.balanceEUR=Math.round(result.balanceEUR*100.0)/100.0;
   result.balanceUSD=Math.round(result.balanceUSD*100.0)/100.0;
@@ -291,6 +359,7 @@ function QueryDSTM(callback){
   result.GpuCount=0;
   result.Hr=0
   result.AvgHr=0;
+  result.api="http://" + lastVPNIP + ":2222/";
   // create a client
   var client = jayson.client.tcp({
     port: 2222,
@@ -355,8 +424,10 @@ function QueryVPN(callback){
 
     try{
       var r=stdout.match(/inet ([0-9]*.[0-9]*.[0-9]*.[0-9]*).*/);
-      if (r!=null)
-      ipaddress=r[1];
+      if (r!=null){
+        ipaddress=r[1];
+        lastVPNIP=ipaddress;
+      }
       else
       ipaddress="error";
     }catch(error){
@@ -364,7 +435,6 @@ function QueryVPN(callback){
     }
 
     callback(stderr,ipaddress);
-
 
   });
 
@@ -396,9 +466,9 @@ function DetectMiner(callback){
             console.log("clay stdout len " + stdout.length );
 
             if (stdout.length>0)
-            callback("claymore");
+              callback("claymore");
             else
-            callback("unknown");
+              callback("unknown");
 
           });
         }
